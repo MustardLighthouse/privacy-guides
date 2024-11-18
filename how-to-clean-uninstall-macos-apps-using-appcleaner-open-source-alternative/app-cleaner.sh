@@ -1,8 +1,26 @@
 #! /bin/bash
 
-if [ -z "$1" ] || [ "$1" = "--help" ]; then
-  printf "%s\n" "Usage: app-cleaner.sh /path/to/app.app"
-  exit 0
+# if [ -z "$1" ] || [ "$1" = "--help" ]; then
+#   printf "%s\n" "Usage: app-cleaner.sh /path/to/app.app"
+#   exit 0
+# fi
+
+# Use AppleScript to open a Finder dialog and get the selected file path
+selected_file=$(osascript <<EOF
+    set theFile to choose file with prompt "Please select a an App to Remove:"
+    POSIX path of theFile
+EOF
+)
+
+# Check if a file was selected
+if [ -n "$selected_file" ]; then
+    # Save the file path as a variable
+    file_path="$selected_file"
+    
+    #echo "Selected file path: $file_path"
+else
+    echo "No file was selected."
+    exit 1
 fi
 
 IFS=$'\n'
@@ -10,12 +28,12 @@ IFS=$'\n'
 red=$(tput setaf 1)
 normal=$(tput sgr0)
 
-if [ ! -e "$1/Contents/Info.plist" ]; then
+if [ ! -e "$file_path/Contents/Info.plist" ]; then
   printf "%s\n" "Cannot find app plist"
   exit 1
 fi
 
-bundle_identifier=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$1/Contents/Info.plist" 2> /dev/null)
+bundle_identifier=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$file_path/Contents/Info.plist" 2> /dev/null)
 
 if [ "$bundle_identifier" = "" ]; then
   printf "%s\n" "Cannot find app bundle identifier"
@@ -25,7 +43,7 @@ fi
 printf "%s\n" "Checking for running processes…"
 sleep 1
 
-app_name=$(basename $1 .app)
+app_name=$(basename $file_path .app)
 
 processes=($(pgrep -afil "$app_name" | grep -v "app-cleaner.sh"))
 
@@ -97,7 +115,7 @@ locations=(
   $(getconf DARWIN_USER_TEMP_DIR | sed "s/\/$//")
 )
 
-paths=($1)
+paths=($file_path)
 
 for location in "${locations[@]}"; do
   paths+=($(find "$location" -iname "*$app_name*" -maxdepth 1 -prune 2>&1 | grep -v "No such file or directory" | grep -v "Operation not permitted" | grep -v "Permission denied"))
